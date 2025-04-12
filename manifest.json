@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "URL Copier",
+  "version": "1.0",
+  "description": "Copy current tab URL using keyboard shortcut",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "permissions": ["activeTab", "clipboardWrite", "scripting"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "copy-url": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+C",
+        "mac": "Command+Shift+C"
+      },
+      "description": "Copy current tab URL to clipboard"
+    },
+    "copy-url-alt": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+X",
+        "mac": "Command+Shift+X"
+      },
+      "description": "Alternative shortcut to copy URL (more reliable)"
+    }
+  }
+}
