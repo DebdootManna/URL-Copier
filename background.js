@@ -6,83 +6,130 @@ chrome.commands.onCommand.addListener((command) => {
       if (tabs.length > 0) {
         const url = tabs[0].url;
         
-        // Always use content script to copy to clipboard
+        // Try to copy directly first using executeScript
         chrome.scripting.executeScript({
           target: { tabId: tabs[0].id },
-          function: copyToClipboard,
+          function: copyToClipboardAndNotify,
           args: [url]
+        }).catch(error => {
+          console.error("Script execution failed:", error);
+          // If content script fails, try Chrome's notifications API as fallback
+          notifyUserWithChromeAPI("URL copied to clipboard!");
         });
       }
     });
   }
 });
 
-// Function to be injected into the page to copy text to clipboard
-function copyToClipboard(text) {
-  // Try the modern Clipboard API first
+// Function that handles both copying and notification in the page context
+function copyToClipboardAndNotify(text) {
+  // Try to copy using Clipboard API
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text)
       .then(() => {
-        // Show notification
-        showNotification('URL copied to clipboard!');
+        console.log("URL copied via Clipboard API");
+        showToastNotification("URL copied!");
       })
       .catch(err => {
-        console.error('Failed to copy URL: ', err);
-        // Fall back to the execCommand method if Clipboard API fails
-        fallbackCopyToClipboard(text);
+        console.error("Clipboard API failed:", err);
+        // Try fallback
+        if (fallbackCopyToClipboard(text)) {
+          showToastNotification("URL copied!");
+        }
       });
   } else {
-    // Use the older execCommand approach as fallback
-    fallbackCopyToClipboard(text);
+    // Use fallback method
+    if (fallbackCopyToClipboard(text)) {
+      showToastNotification("URL copied!");
+    }
   }
 }
 
-// Function to show a notification
-function showNotification(message) {
-  const notification = document.createElement('div');
+// Function to show a toast notification
+function showToastNotification(message) {
+  console.log("Showing notification:", message);
+  
+  // Create notification element with unique ID to prevent duplicates
+  let notification = document.getElementById('url-copier-notification');
+  if (notification) {
+    notification.remove(); // Remove existing notification if present
+  }
+  
+  notification = document.createElement('div');
+  notification.id = 'url-copier-notification';
   notification.textContent = message;
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #323232;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 4px;
-    z-index: 9999;
-    font-family: system-ui, sans-serif;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  `;
+  
+  // Add styles directly to the element for maximum compatibility
+  notification.style.position = 'fixed';
+  notification.style.top = '20px';
+  notification.style.right = '20px';
+  notification.style.backgroundColor = '#4CAF50';
+  notification.style.color = 'white';
+  notification.style.padding = '12px 24px';
+  notification.style.borderRadius = '4px';
+  notification.style.zIndex = '2147483647'; // Maximum z-index
+  notification.style.fontFamily = 'Arial, sans-serif';
+  notification.style.fontWeight = 'bold';
+  notification.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  notification.style.transform = 'translateX(0)';
+  notification.style.opacity = '1';
+  notification.style.transition = 'opacity 0.3s, transform 0.3s';
+  
+  // Start with it slightly off-screen
+  notification.style.transform = 'translateX(100px)';
+  notification.style.opacity = '0';
+  
+  // Add to body
   document.body.appendChild(notification);
   
-  // Remove the notification after 1.5 seconds
+  // Trigger animation
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+    notification.style.opacity = '1';
+  }, 10);
+  
+  // Remove after delay
   setTimeout(() => {
     notification.style.opacity = '0';
-    notification.style.transition = 'opacity 0.5s ease';
-    setTimeout(() => notification.remove(), 500);
-  }, 1500);
+    notification.style.transform = 'translateX(100px)';
+    
+    setTimeout(() => {
+      if (notification && notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 2000);
+  
+  return true;
 }
 
-// Fallback method using execCommand
+// Fallback copy method
 function fallbackCopyToClipboard(text) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';  // Prevent scrolling to bottom
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  
   try {
-    const successful = document.execCommand('copy');
-    if (!successful) throw new Error('Copy command was unsuccessful');
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
     
-    // Show notification
-    showNotification('URL copied to clipboard!');
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    
+    return successful;
   } catch (err) {
-    console.error('Fallback: Unable to copy URL', err);
-    showNotification('Failed to copy URL');
+    console.error("Fallback copy failed:", err);
+    return false;
   }
-  
-  document.body.removeChild(textarea);
+}
+
+// Use Chrome's built-in notifications API as a last resort
+function notifyUserWithChromeAPI(message) {
+  console.log("Trying Chrome notification API");
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icon128.png',
+    title: 'URL Copier',
+    message: message
+  });
 }
